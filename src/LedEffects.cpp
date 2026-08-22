@@ -88,12 +88,18 @@ namespace
 void ledEffectsSetup()
 {
   FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
-  FastLED.setBrightness(10);
+  ledEffectsSetBrightness(10);
 }
 
 void ledEffectsShow()
 {
   FastLED.show();
+}
+
+void ledEffectsSetBrightness(int brightness)
+{
+  brightness = constrain(brightness, 0, 255);
+  FastLED.setBrightness(brightness);
 }
 
 void effectSpectrumBars(const int levels[MATRIX_WIDTH])

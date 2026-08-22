@@ -9,6 +9,9 @@ void ledEffectsSetup();
 // A appeler a chaque frame, apres avoir rempli le buffer de LEDs avec un effet.
 void ledEffectsShow();
 
+// Regle la luminosite globale du bandeau (0 = eteint, 255 = luminosite max).
+void ledEffectsSetBrightness(int brightness);
+
 // --- Effets ---
 // Chaque effet lit les donnees audio (une valeur par colonne, calculee a partir
 // du micro) et met a jour le buffer de LEDs en consequence. Il faut ensuite
