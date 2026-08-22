@@ -19,3 +19,9 @@ void ledEffectsShow();
 // levels[x] (0 = eteinte, MATRIX_HEIGHT = colonne pleine), avec une couleur
 // fixe par colonne.
 void effectSpectrumBars(const int levels[MATRIX_WIDTH]);
+
+// Fait defiler `text` de droite a gauche, une colonne de moins toutes les
+// stepIntervalMs. L'etat de defilement est conserve en interne (un seul
+// defilement actif a la fois) : appeler cette fonction a chaque frame pour
+// faire avancer l'animation, le texte reprend a droite une fois sorti a gauche.
+void effectScrollingText(const char *text, CRGB color, uint16_t stepIntervalMs = 80);
