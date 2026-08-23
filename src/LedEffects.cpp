@@ -57,11 +57,16 @@ namespace
 
   const int CHAR_SPACING = 1;
   const int CHAR_STEP = FONT_WIDTH + CHAR_SPACING;
+  const unsigned long SCROLL_START_HOLD_MS = 1000;
 
   // Position (en colonnes) du debut du texte ; decremente pour defiler vers
   // la gauche. Demarre hors ecran a droite.
   int scrollX = MATRIX_WIDTH;
   unsigned long lastScrollStepTime = 0;
+  // Instant ou le texte est arrive a sa position de depart (hors ecran a
+  // droite) ; sert a marquer une pause avant de commencer a defiler.
+  unsigned long scrollCycleStartTime = 0;
+  bool scrollCycleStarted = false;
 
   void drawGlyphAt(int startX, const uint8_t *rows, CRGB color)
   {
@@ -88,7 +93,7 @@ namespace
 void ledEffectsSetup()
 {
   FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
-  ledEffectsSetBrightness(10);
+  ledEffectsSetBrightness(90);
 }
 
 void ledEffectsShow()
@@ -117,15 +122,38 @@ void effectScrollingText(const char *text, CRGB color, uint16_t stepIntervalMs)
   int textLength = strlen(text);
   int textPixelWidth = textLength * CHAR_STEP;
 
-  if (millis() - lastScrollStepTime >= stepIntervalMs)
+  FastLED.clear();
+
+  // Le texte tient dans la grille : il reste affiche, centre, sans defiler.
+  if (textPixelWidth <= MATRIX_WIDTH)
+  {
+    scrollX = MATRIX_WIDTH;
+    scrollCycleStarted = false;
+
+    int startX = (MATRIX_WIDTH - textPixelWidth) / 2;
+    for (int i = 0; i < textLength; i++)
+      drawGlyphAt(startX + i * CHAR_STEP, getGlyphRows(text[i]), color);
+    return;
+  }
+
+  if (!scrollCycleStarted)
+  {
+    scrollCycleStartTime = millis();
+    scrollCycleStarted = true;
+  }
+
+  bool holdingAtStart = millis() - scrollCycleStartTime < SCROLL_START_HOLD_MS;
+
+  if (!holdingAtStart && millis() - lastScrollStepTime >= stepIntervalMs)
   {
     lastScrollStepTime = millis();
     scrollX--;
     if (scrollX < -textPixelWidth)
+    {
       scrollX = MATRIX_WIDTH;
+      scrollCycleStarted = false;
+    }
   }
-
-  FastLED.clear();
 
   for (int i = 0; i < textLength; i++)
   {
@@ -134,5 +162,15 @@ void effectScrollingText(const char *text, CRGB color, uint16_t stepIntervalMs)
       continue;
 
     drawGlyphAt(charX, getGlyphRows(text[i]), color);
+  }
+}
+
+void effectFillSnake(const int ledCount, const CRGB color)
+{
+  FastLED.clear();
+
+  for (int i = 0; i < ledCount && i < NUM_LEDS; i++)
+  {
+    leds[i] = color;
   }
 }

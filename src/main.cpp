@@ -3,6 +3,7 @@
 #include <arduinoFFT.h>
 #include "Config.h"
 #include "LedEffects.h"
+#include "Potentiometer.h"
 
 #define I2S_WS 15
 #define I2S_SD 13
@@ -154,8 +155,6 @@ void removeDC()
 
 void printBands()
 {
-  Serial.println("---- SPECTRUM ----");
-
   for (int i = 0; i < MATRIX_WIDTH; i++)
   {
     int len = (int)(bands[i] / 10000.0);
@@ -164,14 +163,7 @@ void printBands()
     if (len > MATRIX_HEIGHT)
       len = MATRIX_HEIGHT;
 
-    if (i < 10)
-      Serial.print("0");
-    Serial.print(i);
-    Serial.print(" len: ");
-    Serial.print(len);
     levels[i] = len;
-
-    Serial.println();
   }
 }
 
@@ -185,18 +177,16 @@ void setup()
 
 void loop()
 {
+  int potValue = potRead(34, 10, 255);
+  Serial.print("pot = ");
+  Serial.println(potValue);
+
   captureSamples();
   removeDC();
   computeBands();
   printBands();
 
-  effectSpectrumBars(levels);
+  ledEffectsSetBrightness(potValue);
+  effectScrollingText("i love u", CRGB::Amethyst, 100);
   ledEffectsShow();
-
-  Serial.print("bands = ");
-  for (int x = 0; x < MATRIX_WIDTH; x++)
-  {
-    Serial.print(bands[x]);
-    Serial.print(" ");
-  }
 }

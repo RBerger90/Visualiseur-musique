@@ -28,3 +28,5 @@ void effectSpectrumBars(const int levels[MATRIX_WIDTH]);
 // defilement actif a la fois) : appeler cette fonction a chaque frame pour
 // faire avancer l'animation, le texte reprend a droite une fois sorti a gauche.
 void effectScrollingText(const char *text, CRGB color, uint16_t stepIntervalMs = 80);
+
+void effectFillSnake(const int ledCount, const CRGB color);
