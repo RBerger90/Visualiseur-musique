@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "LedEffects.h"
 #include "Potentiometer.h"
+#include "Button.h"
 
 #define I2S_WS 15
 #define I2S_SD 13
@@ -11,39 +12,32 @@
 #define I2S_PORT I2S_NUM_0
 #define BUFFER_LEN 256
 
+#define POT2_PIN 34
+#define BUTTON_PIN 27
+
+// Ce que la molette 2 modifie actuellement ; le bouton (place sous la
+// molette, simule son clic) fait avancer ce mode.
+enum PotMode
+{
+  POT_MODE_MIC_SENSITIVITY,
+  POT_MODE_COLOR_PALETTE,
+  POT_MODE_SATURATION,
+  POT_MODE_ANIM_SPEED,
+  POT_MODE_COUNT
+};
+
+PotMode potMode = POT_MODE_MIC_SENSITIVITY;
+
+// Multiplie l'amplitude des bandes de frequence dans computeBands() : plus
+// haut = les sons faibles font davantage bouger la matrice.
+float micSensitivity = 1.0;
+
 const uint16_t SAMPLES = 512;
 const uint32_t SAMPLE_RATE = 16000;
 
 double vReal[SAMPLES];
 double vImag[SAMPLES];
 float bands[MATRIX_WIDTH];
-
-int levels[MATRIX_WIDTH] = {
-    2,
-    4,
-    2,
-    3,
-    0,
-    5,
-    5,
-    5,
-    6,
-    3,
-    4,
-    4,
-    5,
-    6,
-    7,
-    2,
-    4,
-    6,
-    8,
-    0,
-    1,
-    2,
-    3,
-    4,
-};
 
 ArduinoFFT<double> FFT(vReal, vImag, SAMPLES, SAMPLE_RATE);
 
@@ -133,7 +127,7 @@ void computeBands()
     if (bands[i] < 0)
       bands[i] = 0;
 
-    bands[i] *= bandGain[i];
+    bands[i] *= bandGain[i] * micSensitivity;
   }
 }
 
@@ -153,40 +147,40 @@ void removeDC()
   }
 }
 
-void printBands()
-{
-  for (int i = 0; i < MATRIX_WIDTH; i++)
-  {
-    int len = (int)(bands[i] / 10000.0);
-    if (len < 0)
-      len = 0;
-    if (len > MATRIX_HEIGHT)
-      len = MATRIX_HEIGHT;
-
-    levels[i] = len;
-  }
-}
-
 void setup()
 {
   Serial.begin(115200);
   delay(500);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
   setupI2S();
   ledEffectsSetup();
 }
 
 void loop()
 {
-  int potValue = potRead(34, 10, 255);
-  Serial.print("pot = ");
-  Serial.println(potValue);
+  if (buttonPressed(BUTTON_PIN))
+  {
+    potMode = (PotMode)((potMode + 1) % POT_MODE_COUNT);
+    Serial.print("pot mode = ");
+    Serial.println(potMode);
+  }
+
+  switch (potMode)
+  {
+  case POT_MODE_MIC_SENSITIVITY:
+    // Plage 0.5x a 3.0x, potRead renvoie un entier donc on travaille en
+    // centiemes puis on redivise.
+    micSensitivity = potRead(POT2_PIN, 50, 300) / 100.0;
+    break;
+  default:
+    // Modes pas encore branches sur la molette.
+    break;
+  }
 
   captureSamples();
   removeDC();
   computeBands();
-  printBands();
 
-  ledEffectsSetBrightness(potValue);
-  effectScrollingText("i love u", CRGB::Amethyst, 100);
+  effectSpectrumBars(bands);
   ledEffectsShow();
 }

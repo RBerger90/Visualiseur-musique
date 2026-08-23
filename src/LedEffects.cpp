@@ -107,13 +107,14 @@ void ledEffectsSetBrightness(int brightness)
   FastLED.setBrightness(brightness);
 }
 
-void effectSpectrumBars(const int levels[MATRIX_WIDTH])
+void effectSpectrumBars(const float bands[MATRIX_WIDTH])
 {
   FastLED.clear();
 
   for (int x = 0; x < MATRIX_WIDTH; x++)
   {
-    setColumn(x, levels[x], columnColors[x]);
+    int height = (int)(bands[x] / 10000.0);
+    setColumn(x, height, columnColors[x]);
   }
 }
 

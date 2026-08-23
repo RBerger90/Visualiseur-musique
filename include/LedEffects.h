@@ -18,10 +18,10 @@ void ledEffectsSetBrightness(int brightness);
 // appeler ledEffectsShow() pour envoyer le resultat au bandeau.
 // C'est ici qu'il faudra ajouter les prochains effets (un par fonction).
 
-// Barres de spectre : chaque colonne s'allume jusqu'a la hauteur donnee par
-// levels[x] (0 = eteinte, MATRIX_HEIGHT = colonne pleine), avec une couleur
-// fixe par colonne.
-void effectSpectrumBars(const int levels[MATRIX_WIDTH]);
+// Barres de spectre : chaque colonne s'allume jusqu'a une hauteur calculee a
+// partir de bands[x] (magnitude FFT de la colonne), avec une couleur fixe par
+// colonne.
+void effectSpectrumBars(const float bands[MATRIX_WIDTH]);
 
 // Fait defiler `text` de droite a gauche, une colonne de moins toutes les
 // stepIntervalMs. L'etat de defilement est conserve en interne (un seul
