@@ -6,21 +6,21 @@ namespace
   int clkPin = -1;
   int dtPin = -1;
 
-  // Etat courant des 2 broches, sous forme (CLK << 1 | DT), mis a jour a
-  // chaque interruption.
+  // Current state of the 2 pins, as (CLK << 1 | DT), updated on every
+  // interrupt.
   volatile uint8_t state = 0;
 
-  // Accumule les quarts de piste entre deux crans mecaniques (un cran = un
-  // cycle complet de quadrature, cf. schema). Remis a zero des qu'un cran
-  // complet est detecte.
+  // Accumulates quarter-steps between two mechanical detents (one detent =
+  // one full quadrature cycle, see diagram). Reset to zero as soon as a
+  // full detent is detected.
   volatile int8_t subSteps = 0;
 
-  // Crans complets en attente de lecture par encoderRead().
+  // Full detents waiting to be read by encoderRead().
   volatile int pendingDetents = 0;
 
-  // Table de transition en quadrature, indexee par (etat precedent << 2 |
-  // etat courant). +1/-1 pour un pas valide dans un sens, 0 pour une
-  // transition invalide (rebond mecanique ou saut de deux etats a la fois).
+  // Quadrature transition table, indexed by (previous state << 2 |
+  // current state). +1/-1 for a valid step in one direction, 0 for an
+  // invalid transition (mechanical bounce or a two-state jump at once).
   const int8_t transitionTable[16] = {
       0, -1, 1, 0,
       1, 0, 0, -1,

@@ -1,7 +1,7 @@
 #pragma once
 
-// A appeler a chaque frame pour un bouton branche entre `pin` et GND (pin en
-// INPUT_PULLUP). Renvoie true une seule fois au moment de l'appui (front
-// descendant), avec anti-rebond logiciel, meme si le bouton reste enfonce
-// plusieurs frames de suite.
+// Call every frame for a button wired between `pin` and GND (pin set to
+// INPUT_PULLUP). Returns true exactly once at the moment of the press
+// (falling edge), with software debouncing, even if the button stays held
+// down for several frames in a row.
 bool buttonPressed(int pin);

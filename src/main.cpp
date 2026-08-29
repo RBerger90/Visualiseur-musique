@@ -16,15 +16,16 @@
 #define ENCODER_DT_PIN 33
 #define BUTTON_PIN 27
 
-// Niveaux de sensibilite micro selectionnables par l'encodeur, un cran = un
-// niveau. Resserres autour de 1.0x (valeur par defaut), plus espaces vers
-// les extremes.
+// Mic sensitivity levels selectable via the encoder, one detent = one
+// level. Tighter around 1.0x (the default value), wider apart toward the
+// extremes.
 const float MIC_SENSITIVITY_LEVELS[] = {0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0};
 const int MIC_SENSITIVITY_LEVEL_COUNT =
     sizeof(MIC_SENSITIVITY_LEVELS) / sizeof(MIC_SENSITIVITY_LEVELS[0]);
 
-// Ce que l'encodeur modifie actuellement ; son bouton (clic sur l'axe) fait
-// avancer ce mode. L'ordre declare ici est celui du cycle au clic.
+// What the encoder currently modifies; its button (a click on the shaft)
+// advances to the next mode. The order declared here is the click cycle
+// order.
 enum PotMode
 {
   POT_MODE_MIC_SENSITIVITY,
@@ -37,49 +38,49 @@ enum PotMode
 
 PotMode potMode = POT_MODE_MIC_SENSITIVITY;
 
-// Index courant dans MIC_SENSITIVITY_LEVELS (2 = 1.0x, la valeur par defaut).
+// Current index into MIC_SENSITIVITY_LEVELS (2 = 1.0x, the default value).
 int micSensitivityLevel = 2;
 
-// Multiplie l'amplitude des bandes de frequence dans computeBands() : plus
-// haut = les sons faibles font davantage bouger la matrice.
+// Multiplies the frequency band amplitude in computeBands(): higher = quiet
+// sounds move the matrix more.
 float micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
 
-// Delai (ms) ajoute a chaque frame en plus du temps de calcul normal, pour
-// ralentir le rythme d'affichage general et le rendre moins stroboscopique.
-// Ordre decroissant (index 0 = le plus lent) pour que animSpeedLevel suive
-// la meme convention de rotation que les autres modes (un cran dans le sens
-// "augmente" fait aussi monter la barre du HUD, sans inversion a part).
+// Delay (ms) added to every frame on top of the normal processing time, to
+// slow down the overall display rate and make it less strobe-like.
+// Descending order (index 0 = slowest) so animSpeedLevel follows the same
+// rotation convention as the other modes (a detent in the "increase"
+// direction also fills up the HUD bar, no separate inversion needed).
 const uint16_t FRAME_DELAY_LEVELS_MS[] = {100, 75, 50, 35, 20, 10, 5, 0};
 const int FRAME_DELAY_LEVEL_COUNT =
     sizeof(FRAME_DELAY_LEVELS_MS) / sizeof(FRAME_DELAY_LEVELS_MS[0]);
 
-// Index courant dans FRAME_DELAY_LEVELS_MS (dernier index = 0ms de delai,
-// le comportement d'avant ce reglage).
+// Current index into FRAME_DELAY_LEVELS_MS (last index = 0ms delay, the
+// behavior before this setting existed).
 int animSpeedLevel = FRAME_DELAY_LEVEL_COUNT - 1;
 
-// Palette actuellement utilisee par effectSpectrumBars().
+// Palette currently used by effectSpectrumBars().
 PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
 
-// Pas applique a baseHue (0-255) par cran de l'encodeur en mode rotation.
+// Step applied to baseHue (0-255) per encoder detent in rotation mode.
 const uint8_t HUE_ROTATION_STEP = 4;
 
-// Teinte de base actuelle (couleur source de PALETTE_SOLID et des degrades).
+// Current base hue (source color for PALETTE_SOLID and the gradients).
 uint8_t baseHue = HUE_PINK;
 
-// Pas applique a saturation (0-255) par cran de l'encodeur. Contrairement a
-// baseHue, ne boucle pas : depasser une extremite n'a pas de sens ici (255
-// ne "redevient" pas 0 une fois depasse).
+// Step applied to saturation (0-255) per encoder detent. Unlike baseHue,
+// this doesn't loop: going past an extremity wouldn't make sense here (255
+// doesn't "become" 0 again once exceeded).
 const int SATURATION_STEP = 8;
 
-// Saturation actuelle des couleurs de palette (255 = pleinement saturees).
+// Current saturation of the palette colors (255 = fully saturated).
 uint8_t saturation = 255;
 
-// Repere de reglage (effectParamHud) : reste affiche ce temps-la apres le
-// dernier changement (clic ou rotation), puis disparait.
+// Settings indicator (effectParamHud): stays displayed for this long after
+// the last change (click or rotation), then disappears.
 const unsigned long PARAM_HUD_DURATION_MS = 3000;
 
-// Reste a false tant qu'aucun changement n'a jamais eu lieu, pour ne pas
-// afficher le repere au demarrage.
+// Stays false until a change has ever happened, so the indicator doesn't
+// show at startup.
 bool paramHudTriggered = false;
 unsigned long paramHudShownAt = 0;
 
@@ -220,9 +221,9 @@ void loop()
     paramHudShownAt = millis();
   }
 
-  // On draine l'encodeur a chaque frame meme hors mode mic sensitivity, pour
-  // qu'un mouvement fait dans un autre mode ne s'applique pas d'un coup au
-  // retour sur celui-ci.
+  // Drain the encoder every frame even outside mic sensitivity mode, so a
+  // movement made in another mode doesn't get applied all at once when
+  // coming back to this one.
   int encoderDelta = encoderRead();
 
   if (encoderDelta != 0)
@@ -234,22 +235,22 @@ void loop()
   switch (potMode)
   {
   case POT_MODE_MIC_SENSITIVITY:
-    // Un cran = un niveau ; borne aux extremites (pas de bouclage, une
-    // sensibilite ne "recommence" pas a 0.5x une fois 3.0x depasse).
+    // One detent = one level; clamped at the extremities (no wraparound, a
+    // sensitivity doesn't "restart" at 0.5x once 3.0x is exceeded).
     micSensitivityLevel = constrain(
         micSensitivityLevel + encoderDelta, 0, MIC_SENSITIVITY_LEVEL_COUNT - 1);
     micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
     break;
   case POT_MODE_ANIM_SPEED:
-    // Un cran = un niveau ; borne comme micSensitivity (pas de bouclage,
-    // une vitesse ne "redevient" pas la plus lente une fois la plus rapide
-    // depassee). Le delai est applique en fin de loop(), pas ici.
+    // One detent = one level; clamped like micSensitivity (no wraparound, a
+    // speed doesn't "become" the slowest again once the fastest is
+    // exceeded). The delay is applied at the end of loop(), not here.
     animSpeedLevel = constrain(
         animSpeedLevel + encoderDelta, 0, FRAME_DELAY_LEVEL_COUNT - 1);
     break;
   case POT_MODE_COLOR_PALETTE:
-    // Un cran = une palette suivante/precedente, avec bouclage circulaire
-    // (la palette n'a pas de bornes comme micSensitivity).
+    // One detent = the next/previous palette, with circular wraparound
+    // (unlike micSensitivity, a palette has no bounds).
     if (encoderDelta != 0)
     {
       int nextPalette = ((int)colorPalette + encoderDelta) % PALETTE_MODE_COUNT;
@@ -261,8 +262,8 @@ void loop()
     }
     break;
   case POT_MODE_HUE_ROTATION:
-    // baseHue est un uint8_t : l'addition boucle naturellement sur 0-255,
-    // pas besoin de la borner comme micSensitivityLevel.
+    // baseHue is a uint8_t: the addition wraps around naturally on 0-255,
+    // no need to clamp it like micSensitivityLevel.
     baseHue += encoderDelta * HUE_ROTATION_STEP;
     ledEffectsSetHue(baseHue);
     break;
@@ -271,7 +272,7 @@ void loop()
     ledEffectsSetSaturation(saturation);
     break;
   default:
-    // Modes pas encore branches sur la molette.
+    // Modes not wired to the encoder yet.
     break;
   }
 
@@ -285,8 +286,8 @@ void loop()
                           millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
   if (paramHudVisible)
   {
-    // Palette n'a pas encore de valeur a afficher : -1 laisse la colonne de
-    // valeur eteinte pour ce mode-la.
+    // Palette doesn't have a displayable value yet: -1 leaves the value
+    // column off for that mode.
     int barLevel = -1;
     if (potMode == POT_MODE_MIC_SENSITIVITY)
       barLevel = micSensitivityLevel;

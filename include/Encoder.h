@@ -1,10 +1,10 @@
 #pragma once
 
-// A appeler une fois dans setup(). Configure clkPin/dtPin en entree avec
-// pull-up et attache les interruptions qui decodent le signal en quadrature.
+// Call once in setup(). Configures clkPin/dtPin as inputs with pull-up and
+// attaches the interrupts that decode the quadrature signal.
 void encoderSetup(int clkPin, int dtPin);
 
-// Nombre de crans effectues depuis le dernier appel : positif en rotation
-// horaire, negatif en antihoraire, 0 si l'encodeur n'a pas bouge. Remet le
-// compteur a zero a chaque appel, donc a n'interroger qu'une fois par frame.
+// Number of detents moved since the last call: positive for clockwise
+// rotation, negative for counter-clockwise, 0 if the encoder hasn't moved.
+// Resets the counter on every call, so only poll it once per frame.
 int encoderRead();

@@ -16,8 +16,8 @@ namespace
 
   ButtonState states[MAX_BUTTONS];
 
-  // Un seul pin par bouton suffit ici (pas de multiplexage), donc un petit
-  // tableau parcouru lineairement est largement suffisant.
+  // One pin per button is enough here (no multiplexing), so a small
+  // linearly-scanned array is plenty.
   ButtonState &stateFor(int pin)
   {
     for (int i = 0; i < MAX_BUTTONS; i++)

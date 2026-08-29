@@ -3,21 +3,21 @@
 #include <FastLED.h>
 #include "Config.h"
 
-// A appeler une fois dans setup() : initialise le bandeau/la matrice de LED.
+// Call once in setup(): initializes the LED strip/matrix.
 void ledEffectsSetup();
 
-// A appeler a chaque frame, apres avoir rempli le buffer de LEDs avec un effet.
+// Call every frame, after filling the LED buffer with an effect.
 void ledEffectsShow();
 
-// Regle la luminosite globale du bandeau (0 = eteint, 255 = luminosite max).
+// Sets the overall strip brightness (0 = off, 255 = max brightness).
 void ledEffectsSetBrightness(int brightness);
 
-// Palettes disponibles pour effectSpectrumBars(). L'ordre est celui dans
-// lequel l'encodeur les fait defiler (mode POT_MODE_COLOR_PALETTE).
-// Chaque forme (arc-en-ciel, degrades) existe en version horizontale (varie
-// selon la colonne, donc la frequence) et verticale (varie selon la hauteur
-// dans la colonne, donc l'amplitude). PALETTE_SOLID n'a qu'une version : une
-// couleur unie ne change pas selon l'orientation choisie.
+// Palettes available for effectSpectrumBars(). The order is the one the
+// encoder cycles through (POT_MODE_COLOR_PALETTE mode).
+// Each shape (rainbow, gradients) exists in a horizontal version (varies
+// with the column, i.e. frequency) and a vertical one (varies with the
+// height within the column, i.e. amplitude). PALETTE_SOLID only has one
+// version: a solid color doesn't change with the chosen orientation.
 enum PaletteMode
 {
   PALETTE_RAINBOW_STATIC_H,
@@ -32,46 +32,45 @@ enum PaletteMode
   PALETTE_MODE_COUNT
 };
 
-// Change la palette utilisee par effectSpectrumBars().
+// Changes the palette used by effectSpectrumBars().
 void ledEffectsSetPalette(PaletteMode mode);
 
-// Teinte de base (0-255) utilisee par PALETTE_SOLID et les deux degrades :
-// PALETTE_SOLID et PALETTE_GRADIENT_1 l'utilisent telle quelle, PALETTE_GRADIENT_2
-// degrade de cette teinte vers une teinte voisine (analogue, calculee
-// automatiquement a partir de cette seule teinte de base).
+// Base hue (0-255) used by PALETTE_SOLID and the two gradients:
+// PALETTE_SOLID and PALETTE_GRADIENT_1 use it as-is, PALETTE_GRADIENT_2
+// gradients from this hue to a neighboring hue (analogous, computed
+// automatically from this single base hue).
 void ledEffectsSetHue(uint8_t hue);
 
-// Saturation (0-255) appliquee a toutes les palettes, arc-en-ciel inclus.
-// 255 = couleurs pleinement saturees, 0 = blanc.
+// Saturation (0-255) applied to all palettes, rainbow included.
+// 255 = fully saturated colors, 0 = white.
 void ledEffectsSetSaturation(uint8_t saturation);
 
-// --- Effets ---
-// Chaque effet lit les donnees audio (une valeur par colonne, calculee a partir
-// du micro) et met a jour le buffer de LEDs en consequence. Il faut ensuite
-// appeler ledEffectsShow() pour envoyer le resultat au bandeau.
-// C'est ici qu'il faudra ajouter les prochains effets (un par fonction).
+// --- Effects ---
+// Each effect reads the audio data (one value per column, computed from the
+// microphone) and updates the LED buffer accordingly. ledEffectsShow() must
+// then be called to send the result to the strip.
+// This is where the next effects should be added (one per function).
 
-// Barres de spectre : chaque colonne s'allume jusqu'a une hauteur calculee a
-// partir de bands[x] (magnitude FFT de la colonne). La couleur de chaque LED
-// depend de la palette active (cf. PaletteMode), selon la colonne et/ou la
-// ligne.
+// Spectrum bars: each column lights up to a height computed from bands[x]
+// (FFT magnitude of the column). The color of each LED depends on the
+// active palette (see PaletteMode), by column and/or row.
 void effectSpectrumBars(const float bands[MATRIX_WIDTH]);
 
-// Fait defiler `text` de droite a gauche, une colonne de moins toutes les
-// stepIntervalMs. L'etat de defilement est conserve en interne (un seul
-// defilement actif a la fois) : appeler cette fonction a chaque frame pour
-// faire avancer l'animation, le texte reprend a droite une fois sorti a gauche.
+// Scrolls `text` right to left, one column less every stepIntervalMs. The
+// scroll state is kept internally (only one scroll active at a time): call
+// this function every frame to advance the animation, the text restarts
+// from the right once it's scrolled off the left.
 void effectScrollingText(const char *text, CRGB color, uint16_t stepIntervalMs = 80);
 
 void effectFillSnake(const int ledCount, const CRGB color);
 
-// Superpose un repere de reglage sur les 3 premieres colonnes (a appeler
-// apres l'effet principal, pour remplacer ces colonnes plutot que les
-// superposer) :
-// - colonne 0 : quel parametre est regle. Une seule LED allumee, au rang
-//   modeIndex en partant du haut (0 = tout en haut).
-// - colonne 1 : la valeur de ce parametre, en barre remplie depuis le bas.
-//   barLevel va de 0 a MATRIX_HEIGHT-1 ; barLevel < 0 signifie qu'aucune
-//   valeur n'est encore affichable pour ce mode, la colonne reste eteinte.
-// - colonne 2 : toujours eteinte, separe le repere du reste du visuel.
+// Overlays a settings indicator on the first 3 columns (call after the main
+// effect, to replace those columns rather than overlaying them):
+// - column 0: which parameter is being adjusted. A single lit LED, at row
+//   modeIndex counting from the top (0 = topmost).
+// - column 1: that parameter's value, as a bar filled from the bottom.
+//   barLevel ranges from 0 to MATRIX_HEIGHT-1; barLevel < 0 means this mode
+//   doesn't have a displayable value yet, the column stays off.
+// - column 2: always off, separates the indicator from the rest of the
+//   visual.
 void effectParamHud(int modeIndex, int barLevel);
