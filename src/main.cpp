@@ -24,14 +24,14 @@ const int MIC_SENSITIVITY_LEVEL_COUNT =
     sizeof(MIC_SENSITIVITY_LEVELS) / sizeof(MIC_SENSITIVITY_LEVELS[0]);
 
 // Ce que l'encodeur modifie actuellement ; son bouton (clic sur l'axe) fait
-// avancer ce mode.
+// avancer ce mode. L'ordre declare ici est celui du cycle au clic.
 enum PotMode
 {
   POT_MODE_MIC_SENSITIVITY,
+  POT_MODE_ANIM_SPEED,
   POT_MODE_COLOR_PALETTE,
   POT_MODE_HUE_ROTATION,
   POT_MODE_SATURATION,
-  POT_MODE_ANIM_SPEED,
   POT_MODE_COUNT
 };
 
@@ -43,6 +43,19 @@ int micSensitivityLevel = 2;
 // Multiplie l'amplitude des bandes de frequence dans computeBands() : plus
 // haut = les sons faibles font davantage bouger la matrice.
 float micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
+
+// Delai (ms) ajoute a chaque frame en plus du temps de calcul normal, pour
+// ralentir le rythme d'affichage general et le rendre moins stroboscopique.
+// Ordre decroissant (index 0 = le plus lent) pour que animSpeedLevel suive
+// la meme convention de rotation que les autres modes (un cran dans le sens
+// "augmente" fait aussi monter la barre du HUD, sans inversion a part).
+const uint16_t FRAME_DELAY_LEVELS_MS[] = {100, 75, 50, 35, 20, 10, 5, 0};
+const int FRAME_DELAY_LEVEL_COUNT =
+    sizeof(FRAME_DELAY_LEVELS_MS) / sizeof(FRAME_DELAY_LEVELS_MS[0]);
+
+// Index courant dans FRAME_DELAY_LEVELS_MS (dernier index = 0ms de delai,
+// le comportement d'avant ce reglage).
+int animSpeedLevel = FRAME_DELAY_LEVEL_COUNT - 1;
 
 // Palette actuellement utilisee par effectSpectrumBars().
 PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
@@ -227,6 +240,13 @@ void loop()
         micSensitivityLevel + encoderDelta, 0, MIC_SENSITIVITY_LEVEL_COUNT - 1);
     micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
     break;
+  case POT_MODE_ANIM_SPEED:
+    // Un cran = un niveau ; borne comme micSensitivity (pas de bouclage,
+    // une vitesse ne "redevient" pas la plus lente une fois la plus rapide
+    // depassee). Le delai est applique en fin de loop(), pas ici.
+    animSpeedLevel = constrain(
+        animSpeedLevel + encoderDelta, 0, FRAME_DELAY_LEVEL_COUNT - 1);
+    break;
   case POT_MODE_COLOR_PALETTE:
     // Un cran = une palette suivante/precedente, avec bouclage circulaire
     // (la palette n'a pas de bornes comme micSensitivity).
@@ -265,11 +285,13 @@ void loop()
                           millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
   if (paramHudVisible)
   {
-    // Palette/vitesse n'ont pas encore de valeur a afficher : -1 laisse la
-    // colonne de valeur eteinte pour ces modes-la.
+    // Palette n'a pas encore de valeur a afficher : -1 laisse la colonne de
+    // valeur eteinte pour ce mode-la.
     int barLevel = -1;
     if (potMode == POT_MODE_MIC_SENSITIVITY)
       barLevel = micSensitivityLevel;
+    else if (potMode == POT_MODE_ANIM_SPEED)
+      barLevel = animSpeedLevel;
     else if (potMode == POT_MODE_HUE_ROTATION)
       barLevel = map(baseHue, 0, 255, 0, MATRIX_HEIGHT - 1);
     else if (potMode == POT_MODE_SATURATION)
@@ -279,4 +301,8 @@ void loop()
   }
 
   ledEffectsShow();
+
+  uint16_t frameDelayMs = FRAME_DELAY_LEVELS_MS[animSpeedLevel];
+  if (frameDelayMs > 0)
+    delay(frameDelayMs);
 }
