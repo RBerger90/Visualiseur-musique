@@ -16,8 +16,12 @@
 #define ENCODER_DT_PIN 33
 #define BUTTON_PIN 27
 
-// Pas applique a micSensitivity par cran de l'encodeur.
-const float MIC_SENSITIVITY_STEP = 0.05;
+// Niveaux de sensibilite micro selectionnables par l'encodeur, un cran = un
+// niveau. Resserres autour de 1.0x (valeur par defaut), plus espaces vers
+// les extremes.
+const float MIC_SENSITIVITY_LEVELS[] = {0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0};
+const int MIC_SENSITIVITY_LEVEL_COUNT =
+    sizeof(MIC_SENSITIVITY_LEVELS) / sizeof(MIC_SENSITIVITY_LEVELS[0]);
 
 // Ce que l'encodeur modifie actuellement ; son bouton (clic sur l'axe) fait
 // avancer ce mode.
@@ -32,9 +36,12 @@ enum PotMode
 
 PotMode potMode = POT_MODE_MIC_SENSITIVITY;
 
+// Index courant dans MIC_SENSITIVITY_LEVELS (2 = 1.0x, la valeur par defaut).
+int micSensitivityLevel = 2;
+
 // Multiplie l'amplitude des bandes de frequence dans computeBands() : plus
 // haut = les sons faibles font davantage bouger la matrice.
-float micSensitivity = 1.0;
+float micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
 
 // Palette actuellement utilisee par effectSpectrumBars().
 PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
@@ -181,10 +188,11 @@ void loop()
   switch (potMode)
   {
   case POT_MODE_MIC_SENSITIVITY:
-    // Plage 0.5x a 3.0x ; l'encodeur ne donne qu'un delta de crans, donc on
-    // part de la valeur courante et on l'ajuste au lieu de la recalculer.
-    micSensitivity = constrain(
-        micSensitivity + encoderDelta * MIC_SENSITIVITY_STEP, 0.5, 3.0);
+    // Un cran = un niveau ; borne aux extremites (pas de bouclage, une
+    // sensibilite ne "recommence" pas a 0.5x une fois 3.0x depasse).
+    micSensitivityLevel = constrain(
+        micSensitivityLevel + encoderDelta, 0, MIC_SENSITIVITY_LEVEL_COUNT - 1);
+    micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
     break;
   case POT_MODE_COLOR_PALETTE:
     // Un cran = une palette suivante/precedente, avec bouclage circulaire

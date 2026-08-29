@@ -128,7 +128,7 @@ namespace
 void ledEffectsSetup()
 {
   FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
-  ledEffectsSetBrightness(90);
+  ledEffectsSetBrightness(30);
 }
 
 void ledEffectsShow()
