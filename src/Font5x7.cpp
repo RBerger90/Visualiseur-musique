@@ -5,13 +5,13 @@ namespace
   struct Glyph
   {
     char character;
-    // Une valeur binaire par rangee : 0b01110 se lit ".###.", le bit de
-    // gauche est la colonne de gauche. Empiler les FONT_HEIGHT rangees
-    // dessine la lettre de haut en bas.
+    // One binary value per row: 0b01110 reads as ".###.", the leftmost bit
+    // is the leftmost column. Stacking the FONT_HEIGHT rows draws the
+    // letter top to bottom.
     uint8_t rows[FONT_HEIGHT];
   };
 
-  // Espace, ponctuation minimale, chiffres et lettres majuscules.
+  // Space, minimal punctuation, digits, and uppercase letters.
   const Glyph FONT_TABLE[] = {
       {' ', {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000}},
       {'!', {0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00000, 0b00100}},
