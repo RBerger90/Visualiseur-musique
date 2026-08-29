@@ -36,6 +36,9 @@ PotMode potMode = POT_MODE_MIC_SENSITIVITY;
 // haut = les sons faibles font davantage bouger la matrice.
 float micSensitivity = 1.0;
 
+// Palette actuellement utilisee par effectSpectrumBars().
+PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
+
 const uint16_t SAMPLES = 512;
 const uint32_t SAMPLE_RATE = 16000;
 
@@ -182,6 +185,19 @@ void loop()
     // part de la valeur courante et on l'ajuste au lieu de la recalculer.
     micSensitivity = constrain(
         micSensitivity + encoderDelta * MIC_SENSITIVITY_STEP, 0.5, 3.0);
+    break;
+  case POT_MODE_COLOR_PALETTE:
+    // Un cran = une palette suivante/precedente, avec bouclage circulaire
+    // (la palette n'a pas de bornes comme micSensitivity).
+    if (encoderDelta != 0)
+    {
+      int nextPalette = ((int)colorPalette + encoderDelta) % PALETTE_MODE_COUNT;
+      if (nextPalette < 0)
+        nextPalette += PALETTE_MODE_COUNT;
+
+      colorPalette = (PaletteMode)nextPalette;
+      ledEffectsSetPalette(colorPalette);
+    }
     break;
   default:
     // Modes pas encore branches sur la molette.

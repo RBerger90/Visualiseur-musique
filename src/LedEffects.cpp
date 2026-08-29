@@ -9,32 +9,67 @@ namespace
 
   CRGB leds[NUM_LEDS];
 
-  const CRGB columnColors[MATRIX_WIDTH] = {
-      CRGB::Red,
-      CRGB::Orange,
-      CRGB::Yellow,
-      CRGB::Green,
-      CRGB::Blue,
-      CRGB::Indigo,
-      CRGB::Violet,
-      CRGB::Pink,
-      CRGB::Cyan,
-      CRGB::Lime,
-      CRGB::Magenta,
-      CRGB::Teal,
-      CRGB::Maroon,
-      CRGB::Navy,
-      CRGB::Olive,
-      CRGB::Purple,
-      CRGB::Silver,
-      CRGB::Gold,
-      CRGB::Coral,
-      CRGB::Salmon,
-      CRGB::Turquoise,
-      CRGB::Lavender,
-      CRGB::Chocolate,
-      CRGB::Crimson,
-  };
+  // Teintes de depart pour les palettes unie/degradees (ambiance "neon").
+  // A terme, ces teintes pourront devenir ajustables (ex: complementaire
+  // auto calculee depuis une seule teinte de base).
+  const uint8_t SOLID_HUE = HUE_PINK;
+  const uint8_t GRADIENT_HUE_A = HUE_PINK;
+  const uint8_t GRADIENT_HUE_B = HUE_GREEN;
+
+  // Duree (ms) pour avancer d'un pas de teinte (0-255) en arc-en-ciel
+  // anime : plus grand = defilement plus lent.
+  const uint16_t RAINBOW_ANIM_MS_PER_HUE_STEP = 20;
+
+  PaletteMode currentPalette = PALETTE_RAINBOW_STATIC_H;
+
+  // Couleur de la LED en colonne x (0 a MATRIX_WIDTH-1), ligne y (0 a
+  // MATRIX_HEIGHT-1), selon la palette active. Les versions _H font varier
+  // la couleur selon x (la frequence), les versions _V selon y (la hauteur
+  // dans la colonne, donc l'amplitude).
+  CRGB paletteColor(int x, int y)
+  {
+    bool vertical = currentPalette == PALETTE_RAINBOW_STATIC_V ||
+                    currentPalette == PALETTE_RAINBOW_ANIMATED_V ||
+                    currentPalette == PALETTE_GRADIENT_1_V ||
+                    currentPalette == PALETTE_GRADIENT_2_V;
+
+    int axisValue = vertical ? y : x;
+    int axisMax = (vertical ? MATRIX_HEIGHT : MATRIX_WIDTH) - 1;
+    uint8_t rainbowHue = (uint8_t)(axisValue * 256 / (axisMax + 1));
+
+    switch (currentPalette)
+    {
+    case PALETTE_RAINBOW_ANIMATED_H:
+    case PALETTE_RAINBOW_ANIMATED_V:
+    {
+      uint8_t offset = (uint8_t)(millis() / RAINBOW_ANIM_MS_PER_HUE_STEP);
+      return CHSV(rainbowHue + offset, 255, 255);
+    }
+
+    case PALETTE_SOLID:
+      return CHSV(SOLID_HUE, 255, 255);
+
+    case PALETTE_GRADIENT_1_H:
+    case PALETTE_GRADIENT_1_V:
+    {
+      // Meme teinte partout, seule la luminosite varie le long de l'axe.
+      uint8_t value = map(axisValue, 0, axisMax, 60, 255);
+      return CHSV(GRADIENT_HUE_A, 255, value);
+    }
+
+    case PALETTE_GRADIENT_2_H:
+    case PALETTE_GRADIENT_2_V:
+    {
+      uint8_t hue = map(axisValue, 0, axisMax, GRADIENT_HUE_A, GRADIENT_HUE_B);
+      return CHSV(hue, 255, 255);
+    }
+
+    case PALETTE_RAINBOW_STATIC_H:
+    case PALETTE_RAINBOW_STATIC_V:
+    default:
+      return CHSV(rainbowHue, 255, 255);
+    }
+  }
 
   // Le cablage serpente d'une colonne a l'autre : les lignes paires se lisent
   // de gauche a droite, les lignes impaires de droite a gauche.
@@ -45,13 +80,13 @@ namespace
     return y * MATRIX_WIDTH + (MATRIX_WIDTH - 1 - x);
   }
 
-  void setColumn(int x, int height, CRGB color)
+  void setColumn(int x, int height)
   {
     height = constrain(height, 0, MATRIX_HEIGHT);
 
     for (int y = 0; y < MATRIX_HEIGHT; y++)
     {
-      leds[ledIndex(x, y)] = (y < height) ? color : CRGB::Black;
+      leds[ledIndex(x, y)] = (y < height) ? paletteColor(x, y) : CRGB::Black;
     }
   }
 
@@ -107,6 +142,11 @@ void ledEffectsSetBrightness(int brightness)
   FastLED.setBrightness(brightness);
 }
 
+void ledEffectsSetPalette(PaletteMode mode)
+{
+  currentPalette = mode;
+}
+
 void effectSpectrumBars(const float bands[MATRIX_WIDTH])
 {
   FastLED.clear();
@@ -114,7 +154,7 @@ void effectSpectrumBars(const float bands[MATRIX_WIDTH])
   for (int x = 0; x < MATRIX_WIDTH; x++)
   {
     int height = (int)(bands[x] / 10000.0);
-    setColumn(x, height, columnColors[x]);
+    setColumn(x, height);
   }
 }
 
