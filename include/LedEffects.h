@@ -68,9 +68,12 @@ void effectFillSnake(const int ledCount, const CRGB color);
 // effect, to replace those columns rather than overlaying them):
 // - column 0: which parameter is being adjusted. A single lit LED, at row
 //   modeIndex counting from the top (0 = topmost).
-// - column 1: that parameter's value, as a bar filled from the bottom.
-//   barLevel ranges from 0 to MATRIX_HEIGHT-1; barLevel < 0 means this mode
-//   doesn't have a displayable value yet, the column stays off.
+// - column 1: that parameter's value, in color barColor. barLevel ranges
+//   from 0 to MATRIX_HEIGHT-1; barLevel < 0 means this mode doesn't have a
+//   displayable value yet, the column stays off. barFilled draws a bar
+//   filled from the bottom (the default); when false, only the single LED
+//   at barLevel lights up.
 // - column 2: always off, separates the indicator from the rest of the
 //   visual.
-void effectParamHud(int modeIndex, int barLevel);
+void effectParamHud(int modeIndex, int barLevel,
+                     CRGB barColor = CRGB::MediumVioletRed, bool barFilled = true);

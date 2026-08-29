@@ -237,7 +237,7 @@ void effectFillSnake(const int ledCount, const CRGB color)
   }
 }
 
-void effectParamHud(int modeIndex, int barLevel)
+void effectParamHud(int modeIndex, int barLevel, CRGB barColor, bool barFilled)
 {
   modeIndex = constrain(modeIndex, 0, MATRIX_HEIGHT - 1);
 
@@ -247,9 +247,18 @@ void effectParamHud(int modeIndex, int barLevel)
     leds[ledIndex(0, y)] = isModeRow ? CRGB::MediumVioletRed : CRGB::Black;
   }
 
-  int barHeight = barLevel >= 0 ? constrain(barLevel + 1, 0, MATRIX_HEIGHT) : 0;
   for (int y = 0; y < MATRIX_HEIGHT; y++)
-    leds[ledIndex(1, y)] = (y < barHeight) ? CRGB::MediumVioletRed : CRGB::Black;
+  {
+    bool lit;
+    if (barLevel < 0)
+      lit = false;
+    else if (barFilled)
+      lit = y <= constrain(barLevel, 0, MATRIX_HEIGHT - 1);
+    else
+      lit = y == constrain(barLevel, 0, MATRIX_HEIGHT - 1);
+
+    leds[ledIndex(1, y)] = lit ? barColor : CRGB::Black;
+  }
 
   for (int y = 0; y < MATRIX_HEIGHT; y++)
     leds[ledIndex(2, y)] = CRGB::Black;

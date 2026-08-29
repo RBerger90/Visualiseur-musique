@@ -56,7 +56,7 @@ const int FRAME_DELAY_LEVEL_COUNT =
 
 // Current index into FRAME_DELAY_LEVELS_MS (last index = 0ms delay, the
 // behavior before this setting existed).
-int animSpeedLevel = FRAME_DELAY_LEVEL_COUNT - 1;
+int animSpeedLevel = FRAME_DELAY_LEVEL_COUNT - 4;
 
 // Palette currently used by effectSpectrumBars().
 PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
@@ -283,22 +283,33 @@ void loop()
   effectSpectrumBars(bands);
 
   bool paramHudVisible = paramHudTriggered &&
-                          millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
+                         millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
   if (paramHudVisible)
   {
-    // Palette doesn't have a displayable value yet: -1 leaves the value
-    // column off for that mode.
-    int barLevel = -1;
-    if (potMode == POT_MODE_MIC_SENSITIVITY)
-      barLevel = micSensitivityLevel;
-    else if (potMode == POT_MODE_ANIM_SPEED)
-      barLevel = animSpeedLevel;
-    else if (potMode == POT_MODE_HUE_ROTATION)
-      barLevel = map(baseHue, 0, 255, 0, MATRIX_HEIGHT - 1);
-    else if (potMode == POT_MODE_SATURATION)
-      barLevel = map(saturation, 0, 255, 0, MATRIX_HEIGHT - 1);
+    if (potMode == POT_MODE_HUE_ROTATION)
+    {
+      // Single pixel rather than a filled bar, in the actual hue being
+      // selected, so the color choice reads directly off the indicator.
+      // Bucketed (not map()) so the top bucket is reachable even though
+      // baseHue advances by steps of 4 and never lands on exactly 255.
+      int barLevel = (baseHue * MATRIX_HEIGHT) / 256;
+      effectParamHud((int)potMode, barLevel, CHSV(baseHue, saturation, 255), false);
+    }
+    else
+    {
+      // Palette doesn't have a displayable value yet: -1 leaves the value
+      // column off for that mode.
+      int barLevel = -1;
+      if (potMode == POT_MODE_MIC_SENSITIVITY)
+        barLevel = micSensitivityLevel;
+      else if (potMode == POT_MODE_ANIM_SPEED)
+        barLevel = animSpeedLevel;
+      else if (potMode == POT_MODE_SATURATION)
+        // Bucketed, same reasoning as baseHue above.
+        barLevel = (saturation * MATRIX_HEIGHT) / 256;
 
-    effectParamHud((int)potMode, barLevel);
+      effectParamHud((int)potMode, barLevel);
+    }
   }
 
   ledEffectsShow();
