@@ -53,6 +53,14 @@ const uint8_t HUE_ROTATION_STEP = 4;
 // Teinte de base actuelle (couleur source de PALETTE_SOLID et des degrades).
 uint8_t baseHue = HUE_PINK;
 
+// Pas applique a saturation (0-255) par cran de l'encodeur. Contrairement a
+// baseHue, ne boucle pas : depasser une extremite n'a pas de sens ici (255
+// ne "redevient" pas 0 une fois depasse).
+const int SATURATION_STEP = 8;
+
+// Saturation actuelle des couleurs de palette (255 = pleinement saturees).
+uint8_t saturation = 255;
+
 // Repere de reglage (effectParamHud) : reste affiche ce temps-la apres le
 // dernier changement (clic ou rotation), puis disparait.
 const unsigned long PARAM_HUD_DURATION_MS = 3000;
@@ -238,6 +246,10 @@ void loop()
     baseHue += encoderDelta * HUE_ROTATION_STEP;
     ledEffectsSetHue(baseHue);
     break;
+  case POT_MODE_SATURATION:
+    saturation = constrain((int)saturation + encoderDelta * SATURATION_STEP, 0, 255);
+    ledEffectsSetSaturation(saturation);
+    break;
   default:
     // Modes pas encore branches sur la molette.
     break;
@@ -253,13 +265,15 @@ void loop()
                           millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
   if (paramHudVisible)
   {
-    // Palette/saturation/vitesse n'ont pas encore de valeur a afficher :
-    // -1 laisse la colonne de valeur eteinte pour ces modes-la.
+    // Palette/vitesse n'ont pas encore de valeur a afficher : -1 laisse la
+    // colonne de valeur eteinte pour ces modes-la.
     int barLevel = -1;
     if (potMode == POT_MODE_MIC_SENSITIVITY)
       barLevel = micSensitivityLevel;
     else if (potMode == POT_MODE_HUE_ROTATION)
       barLevel = map(baseHue, 0, 255, 0, MATRIX_HEIGHT - 1);
+    else if (potMode == POT_MODE_SATURATION)
+      barLevel = map(saturation, 0, 255, 0, MATRIX_HEIGHT - 1);
 
     effectParamHud((int)potMode, barLevel);
   }

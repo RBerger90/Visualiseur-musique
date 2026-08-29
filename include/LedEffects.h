@@ -41,6 +41,10 @@ void ledEffectsSetPalette(PaletteMode mode);
 // automatiquement a partir de cette seule teinte de base).
 void ledEffectsSetHue(uint8_t hue);
 
+// Saturation (0-255) appliquee a toutes les palettes, arc-en-ciel inclus.
+// 255 = couleurs pleinement saturees, 0 = blanc.
+void ledEffectsSetSaturation(uint8_t saturation);
+
 // --- Effets ---
 // Chaque effet lit les donnees audio (une valeur par colonne, calculee a partir
 // du micro) et met a jour le buffer de LEDs en consequence. Il faut ensuite

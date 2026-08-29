@@ -13,6 +13,11 @@ namespace
   // ledEffectsSetHue() (mode POT_MODE_HUE_ROTATION). Depart en magenta neon.
   uint8_t baseHue = HUE_PINK;
 
+  // Saturation appliquee a toutes les palettes (arc-en-ciel inclus),
+  // ajustable via ledEffectsSetSaturation() (mode POT_MODE_SATURATION).
+  // 255 = couleurs pleinement saturees, 0 = blanc (aucune teinte visible).
+  uint8_t baseSaturation = 255;
+
   // Duree (ms) pour avancer d'un pas de teinte (0-255) en arc-en-ciel
   // anime : plus grand = defilement plus lent.
   const uint16_t RAINBOW_ANIM_MS_PER_HUE_STEP = 20;
@@ -44,18 +49,18 @@ namespace
     case PALETTE_RAINBOW_ANIMATED_V:
     {
       uint8_t offset = (uint8_t)(millis() / RAINBOW_ANIM_MS_PER_HUE_STEP);
-      return CHSV(rainbowHue + offset, 255, 255);
+      return CHSV(rainbowHue + offset, baseSaturation, 255);
     }
 
     case PALETTE_SOLID:
-      return CHSV(baseHue, 255, 255);
+      return CHSV(baseHue, baseSaturation, 255);
 
     case PALETTE_GRADIENT_1_H:
     case PALETTE_GRADIENT_1_V:
     {
       // Meme teinte partout, seule la luminosite varie le long de l'axe.
       uint8_t value = map(axisValue, 0, axisMax, 60, 255);
-      return CHSV(baseHue, 255, value);
+      return CHSV(baseHue, baseSaturation, value);
     }
 
     case PALETTE_GRADIENT_2_H:
@@ -66,13 +71,13 @@ namespace
       // depart, le wrap final se fait au cast en uint8_t par CHSV.
       int secondHue = (int)baseHue - GRADIENT_2_HUE_OFFSET;
       int hue = map(axisValue, 0, axisMax, (int)baseHue, secondHue);
-      return CHSV((uint8_t)hue, 255, 255);
+      return CHSV((uint8_t)hue, baseSaturation, 255);
     }
 
     case PALETTE_RAINBOW_STATIC_H:
     case PALETTE_RAINBOW_STATIC_V:
     default:
-      return CHSV(rainbowHue, 255, 255);
+      return CHSV(rainbowHue, baseSaturation, 255);
     }
   }
 
@@ -155,6 +160,11 @@ void ledEffectsSetPalette(PaletteMode mode)
 void ledEffectsSetHue(uint8_t hue)
 {
   baseHue = hue;
+}
+
+void ledEffectsSetSaturation(uint8_t saturation)
+{
+  baseSaturation = saturation;
 }
 
 void effectSpectrumBars(const float bands[MATRIX_WIDTH])
