@@ -9,16 +9,17 @@ namespace
 
   CRGB leds[NUM_LEDS];
 
-  // Teintes de depart pour les palettes unie/degradees (ambiance "neon").
-  // A terme, ces teintes pourront devenir ajustables (ex: complementaire
-  // auto calculee depuis une seule teinte de base).
-  const uint8_t SOLID_HUE = HUE_PINK;
-  const uint8_t GRADIENT_HUE_A = HUE_PINK;
-  const uint8_t GRADIENT_HUE_B = HUE_GREEN;
+  // Teinte de base pour PALETTE_SOLID et les degrades, ajustable via
+  // ledEffectsSetHue() (mode POT_MODE_HUE_ROTATION). Depart en magenta neon.
+  uint8_t baseHue = HUE_PINK;
 
   // Duree (ms) pour avancer d'un pas de teinte (0-255) en arc-en-ciel
   // anime : plus grand = defilement plus lent.
   const uint16_t RAINBOW_ANIM_MS_PER_HUE_STEP = 20;
+
+  // Ecart de teinte (sur 256) pour la 2e couleur de PALETTE_GRADIENT_2 :
+  // 32 = 45 degres, des teintes voisines (analogues) plutot qu'opposees.
+  const int GRADIENT_2_HUE_OFFSET = 32;
 
   PaletteMode currentPalette = PALETTE_RAINBOW_STATIC_H;
 
@@ -47,21 +48,25 @@ namespace
     }
 
     case PALETTE_SOLID:
-      return CHSV(SOLID_HUE, 255, 255);
+      return CHSV(baseHue, 255, 255);
 
     case PALETTE_GRADIENT_1_H:
     case PALETTE_GRADIENT_1_V:
     {
       // Meme teinte partout, seule la luminosite varie le long de l'axe.
       uint8_t value = map(axisValue, 0, axisMax, 60, 255);
-      return CHSV(GRADIENT_HUE_A, 255, value);
+      return CHSV(baseHue, 255, value);
     }
 
     case PALETTE_GRADIENT_2_H:
     case PALETTE_GRADIENT_2_V:
     {
-      uint8_t hue = map(axisValue, 0, axisMax, GRADIENT_HUE_A, GRADIENT_HUE_B);
-      return CHSV(hue, 255, 255);
+      // Teinte voisine (analogue) plutot qu'opposee. En int pour garder le
+      // sens de rotation du degrade stable quelle que soit la teinte de
+      // depart, le wrap final se fait au cast en uint8_t par CHSV.
+      int secondHue = (int)baseHue - GRADIENT_2_HUE_OFFSET;
+      int hue = map(axisValue, 0, axisMax, (int)baseHue, secondHue);
+      return CHSV((uint8_t)hue, 255, 255);
     }
 
     case PALETTE_RAINBOW_STATIC_H:
@@ -145,6 +150,11 @@ void ledEffectsSetBrightness(int brightness)
 void ledEffectsSetPalette(PaletteMode mode)
 {
   currentPalette = mode;
+}
+
+void ledEffectsSetHue(uint8_t hue)
+{
+  baseHue = hue;
 }
 
 void effectSpectrumBars(const float bands[MATRIX_WIDTH])

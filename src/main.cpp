@@ -29,6 +29,7 @@ enum PotMode
 {
   POT_MODE_MIC_SENSITIVITY,
   POT_MODE_COLOR_PALETTE,
+  POT_MODE_HUE_ROTATION,
   POT_MODE_SATURATION,
   POT_MODE_ANIM_SPEED,
   POT_MODE_COUNT
@@ -45,6 +46,12 @@ float micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
 
 // Palette actuellement utilisee par effectSpectrumBars().
 PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
+
+// Pas applique a baseHue (0-255) par cran de l'encodeur en mode rotation.
+const uint8_t HUE_ROTATION_STEP = 4;
+
+// Teinte de base actuelle (couleur source de PALETTE_SOLID et des degrades).
+uint8_t baseHue = HUE_PINK;
 
 // Repere de reglage (effectParamHud) : reste affiche ce temps-la apres le
 // dernier changement (clic ou rotation), puis disparait.
@@ -225,6 +232,12 @@ void loop()
       ledEffectsSetPalette(colorPalette);
     }
     break;
+  case POT_MODE_HUE_ROTATION:
+    // baseHue est un uint8_t : l'addition boucle naturellement sur 0-255,
+    // pas besoin de la borner comme micSensitivityLevel.
+    baseHue += encoderDelta * HUE_ROTATION_STEP;
+    ledEffectsSetHue(baseHue);
+    break;
   default:
     // Modes pas encore branches sur la molette.
     break;
@@ -240,9 +253,14 @@ void loop()
                           millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
   if (paramHudVisible)
   {
-    // Seul le mode mic sensitivity a une valeur discrete a afficher pour
-    // l'instant ; les autres modes laissent la colonne de valeur eteinte.
-    int barLevel = (potMode == POT_MODE_MIC_SENSITIVITY) ? micSensitivityLevel : -1;
+    // Palette/saturation/vitesse n'ont pas encore de valeur a afficher :
+    // -1 laisse la colonne de valeur eteinte pour ces modes-la.
+    int barLevel = -1;
+    if (potMode == POT_MODE_MIC_SENSITIVITY)
+      barLevel = micSensitivityLevel;
+    else if (potMode == POT_MODE_HUE_ROTATION)
+      barLevel = map(baseHue, 0, 255, 0, MATRIX_HEIGHT - 1);
+
     effectParamHud((int)potMode, barLevel);
   }
 

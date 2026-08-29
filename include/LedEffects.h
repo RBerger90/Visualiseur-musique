@@ -35,6 +35,12 @@ enum PaletteMode
 // Change la palette utilisee par effectSpectrumBars().
 void ledEffectsSetPalette(PaletteMode mode);
 
+// Teinte de base (0-255) utilisee par PALETTE_SOLID et les deux degrades :
+// PALETTE_SOLID et PALETTE_GRADIENT_1 l'utilisent telle quelle, PALETTE_GRADIENT_2
+// degrade de cette teinte vers une teinte voisine (analogue, calculee
+// automatiquement a partir de cette seule teinte de base).
+void ledEffectsSetHue(uint8_t hue);
+
 // --- Effets ---
 // Chaque effet lit les donnees audio (une valeur par colonne, calculee a partir
 // du micro) et met a jour le buffer de LEDs en consequence. Il faut ensuite
