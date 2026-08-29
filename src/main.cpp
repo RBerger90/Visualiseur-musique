@@ -46,6 +46,15 @@ float micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
 // Palette actuellement utilisee par effectSpectrumBars().
 PaletteMode colorPalette = PALETTE_RAINBOW_STATIC_H;
 
+// Repere de reglage (effectParamHud) : reste affiche ce temps-la apres le
+// dernier changement (clic ou rotation), puis disparait.
+const unsigned long PARAM_HUD_DURATION_MS = 3000;
+
+// Reste a false tant qu'aucun changement n'a jamais eu lieu, pour ne pas
+// afficher le repere au demarrage.
+bool paramHudTriggered = false;
+unsigned long paramHudShownAt = 0;
+
 const uint16_t SAMPLES = 512;
 const uint32_t SAMPLE_RATE = 16000;
 
@@ -178,12 +187,21 @@ void loop()
     potMode = (PotMode)((potMode + 1) % POT_MODE_COUNT);
     Serial.print("pot mode = ");
     Serial.println(potMode);
+
+    paramHudTriggered = true;
+    paramHudShownAt = millis();
   }
 
   // On draine l'encodeur a chaque frame meme hors mode mic sensitivity, pour
   // qu'un mouvement fait dans un autre mode ne s'applique pas d'un coup au
   // retour sur celui-ci.
   int encoderDelta = encoderRead();
+
+  if (encoderDelta != 0)
+  {
+    paramHudTriggered = true;
+    paramHudShownAt = millis();
+  }
 
   switch (potMode)
   {
@@ -217,5 +235,16 @@ void loop()
   computeBands();
 
   effectSpectrumBars(bands);
+
+  bool paramHudVisible = paramHudTriggered &&
+                          millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
+  if (paramHudVisible)
+  {
+    // Seul le mode mic sensitivity a une valeur discrete a afficher pour
+    // l'instant ; les autres modes laissent la colonne de valeur eteinte.
+    int barLevel = (potMode == POT_MODE_MIC_SENSITIVITY) ? micSensitivityLevel : -1;
+    effectParamHud((int)potMode, barLevel);
+  }
+
   ledEffectsShow();
 }

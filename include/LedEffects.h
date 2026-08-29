@@ -54,3 +54,14 @@ void effectSpectrumBars(const float bands[MATRIX_WIDTH]);
 void effectScrollingText(const char *text, CRGB color, uint16_t stepIntervalMs = 80);
 
 void effectFillSnake(const int ledCount, const CRGB color);
+
+// Superpose un repere de reglage sur les 3 premieres colonnes (a appeler
+// apres l'effet principal, pour remplacer ces colonnes plutot que les
+// superposer) :
+// - colonne 0 : quel parametre est regle. Une seule LED allumee, au rang
+//   modeIndex en partant du haut (0 = tout en haut).
+// - colonne 1 : la valeur de ce parametre, en barre remplie depuis le bas.
+//   barLevel va de 0 a MATRIX_HEIGHT-1 ; barLevel < 0 signifie qu'aucune
+//   valeur n'est encore affichable pour ce mode, la colonne reste eteinte.
+// - colonne 2 : toujours eteinte, separe le repere du reste du visuel.
+void effectParamHud(int modeIndex, int barLevel);

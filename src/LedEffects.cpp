@@ -215,3 +215,21 @@ void effectFillSnake(const int ledCount, const CRGB color)
     leds[i] = color;
   }
 }
+
+void effectParamHud(int modeIndex, int barLevel)
+{
+  modeIndex = constrain(modeIndex, 0, MATRIX_HEIGHT - 1);
+
+  for (int y = 0; y < MATRIX_HEIGHT; y++)
+  {
+    bool isModeRow = y == MATRIX_HEIGHT - 1 - modeIndex;
+    leds[ledIndex(0, y)] = isModeRow ? CRGB::MediumVioletRed : CRGB::Black;
+  }
+
+  int barHeight = barLevel >= 0 ? constrain(barLevel + 1, 0, MATRIX_HEIGHT) : 0;
+  for (int y = 0; y < MATRIX_HEIGHT; y++)
+    leds[ledIndex(1, y)] = (y < barHeight) ? CRGB::MediumVioletRed : CRGB::Black;
+
+  for (int y = 0; y < MATRIX_HEIGHT; y++)
+    leds[ledIndex(2, y)] = CRGB::Black;
+}
