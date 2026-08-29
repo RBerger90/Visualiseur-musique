@@ -3,7 +3,7 @@
 #include <arduinoFFT.h>
 #include "Config.h"
 #include "LedEffects.h"
-#include "Potentiometer.h"
+#include "Encoder.h"
 #include "Button.h"
 
 #define I2S_WS 15
@@ -12,11 +12,15 @@
 #define I2S_PORT I2S_NUM_0
 #define BUFFER_LEN 256
 
-#define POT2_PIN 34
+#define ENCODER_CLK_PIN 32
+#define ENCODER_DT_PIN 33
 #define BUTTON_PIN 27
 
-// Ce que la molette 2 modifie actuellement ; le bouton (place sous la
-// molette, simule son clic) fait avancer ce mode.
+// Pas applique a micSensitivity par cran de l'encodeur.
+const float MIC_SENSITIVITY_STEP = 0.05;
+
+// Ce que l'encodeur modifie actuellement ; son bouton (clic sur l'axe) fait
+// avancer ce mode.
 enum PotMode
 {
   POT_MODE_MIC_SENSITIVITY,
@@ -152,6 +156,7 @@ void setup()
   Serial.begin(115200);
   delay(500);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  encoderSetup(ENCODER_CLK_PIN, ENCODER_DT_PIN);
   setupI2S();
   ledEffectsSetup();
 }
@@ -165,12 +170,18 @@ void loop()
     Serial.println(potMode);
   }
 
+  // On draine l'encodeur a chaque frame meme hors mode mic sensitivity, pour
+  // qu'un mouvement fait dans un autre mode ne s'applique pas d'un coup au
+  // retour sur celui-ci.
+  int encoderDelta = encoderRead();
+
   switch (potMode)
   {
   case POT_MODE_MIC_SENSITIVITY:
-    // Plage 0.5x a 3.0x, potRead renvoie un entier donc on travaille en
-    // centiemes puis on redivise.
-    micSensitivity = potRead(POT2_PIN, 50, 300) / 100.0;
+    // Plage 0.5x a 3.0x ; l'encodeur ne donne qu'un delta de crans, donc on
+    // part de la valeur courante et on l'ajuste au lieu de la recalculer.
+    micSensitivity = constrain(
+        micSensitivity + encoderDelta * MIC_SENSITIVITY_STEP, 0.5, 3.0);
     break;
   default:
     // Modes pas encore branches sur la molette.
