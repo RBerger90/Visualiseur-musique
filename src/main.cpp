@@ -5,6 +5,7 @@
 #include "LedEffects.h"
 #include "Encoder.h"
 #include "Button.h"
+#include "Fader.h"
 
 #define I2S_WS 15
 #define I2S_SD 13
@@ -15,6 +16,10 @@
 #define ENCODER_CLK_PIN 32
 #define ENCODER_DT_PIN 33
 #define BUTTON_PIN 27
+
+// Fader wiper (OUTA). ADC1 input-only pin: it can only read, which is
+// exactly what a wiper driven by the fader's voltage divider needs.
+#define FADER_PIN 34
 
 // Mic sensitivity levels selectable via the encoder, one detent = one
 // level. Tighter around 1.0x (the default value), wider apart toward the
@@ -74,6 +79,36 @@ const int SATURATION_STEP = 8;
 
 // Current saturation of the palette colors (255 = fully saturated).
 uint8_t saturation = 255;
+
+// Fader (sliding potentiometer) → overall brightness. Read raw (0-4095)
+// then mapped so the ends of the travel stay usable: 5 keeps a faint glow
+// instead of switching off, 250 avoids the very top of FastLED's range.
+const int FADER_BRIGHTNESS_MIN = 5;
+const int FADER_BRIGHTNESS_MAX = 250;
+
+// Raw values measured at the two ends of the physical travel, NOT the
+// ADC's theoretical 0-4095: the ESP32 ADC (11 dB attenuation) saturates
+// around 2.45-2.6V, so with the fader dividing 3.3V the top ~1cm of
+// travel all reads 4095. Mapping over the real range spreads brightness
+// across the whole travel; the Serial print shows the raw value to
+// re-measure these if the wiring or supply changes.
+const int FADER_RAW_MIN = 0;
+const int FADER_RAW_MAX = 1950;
+
+// The brightness only updates when the raw reading moves more than this
+// many ADC units away from the last *applied* position. Comparing against
+// the applied value (not the previous read) anchors the threshold: the
+// ADC noise around a static wiper stays inside the deadband instead of
+// accumulating read after read into a slow drift of the brightness.
+// Sized above the measured +-50 rest noise of this ADC + fader combo.
+const int FADER_DEADBAND = 20;
+
+// Raw fader position currently applied to the LEDs. faderApplied stays
+// false until the first frame, so the startup brightness always comes
+// from the actual wiper position (ledEffectsSetup() hardcodes 30 until
+// then).
+int appliedFaderRaw = 0;
+bool faderApplied = false;
 
 // Settings indicator (effectParamHud): stays displayed for this long after
 // the last change (click or rotation), then disappears.
@@ -205,6 +240,7 @@ void setup()
   delay(500);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   encoderSetup(ENCODER_CLK_PIN, ENCODER_DT_PIN);
+  faderSetup(FADER_PIN);
   setupI2S();
   ledEffectsSetup();
 }
@@ -274,6 +310,27 @@ void loop()
   default:
     // Modes not wired to the encoder yet.
     break;
+  }
+
+  // Fader → brightness: re-apply only on a genuine wiper move (beyond the
+  // deadband around the last applied position), never on ADC jitter.
+  int faderRaw = faderReadRaw();
+  Serial.print("faderRaw = ");
+  Serial.println(faderRaw);
+  if (!faderApplied || abs(faderRaw - appliedFaderRaw) > FADER_DEADBAND)
+  {
+    appliedFaderRaw = faderRaw;
+    faderApplied = true;
+
+    int brightness = map(constrain(faderRaw, FADER_RAW_MIN, FADER_RAW_MAX),
+                         FADER_RAW_MIN, FADER_RAW_MAX,
+                         FADER_BRIGHTNESS_MIN, FADER_BRIGHTNESS_MAX);
+    ledEffectsSetBrightness(brightness);
+
+    Serial.print("faderRaw = ");
+    Serial.print(faderRaw);
+    Serial.print(", brightness = ");
+    Serial.println(brightness);
   }
 
   captureSamples();
