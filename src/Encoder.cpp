@@ -8,49 +8,26 @@ namespace
   int clkPin[ENCODER_COUNT];
   int dtPin[ENCODER_COUNT];
 
-  // Current state of the 2 pins, as (CLK << 1 | DT), updated on every
-  // interrupt.
-  volatile uint8_t state[ENCODER_COUNT];
+  // One step accumulated by the CLK ISR per detent.
+  volatile int pendingRawSteps[ENCODER_COUNT];
 
-  // Accumulates quarter-steps between two mechanical detents (one detent =
-  // one full quadrature cycle, see diagram). Reset to zero as soon as a
-  // full detent is detected.
-  volatile int8_t subSteps[ENCODER_COUNT];
-
-  // Full detents waiting to be read by encoderRead().
-  volatile int pendingDetents[ENCODER_COUNT];
-
-  // Quadrature transition table, indexed by (previous state << 2 |
-  // current state). +1/-1 for a valid step in one direction, 0 for an
-  // invalid transition (mechanical bounce or a two-state jump at once).
-  const int8_t transitionTable[16] = {
-      0, -1, 1, 0,
-      1, 0, 0, -1,
-      -1, 0, 0, 1,
-      0, 1, -1, 0};
-
-  // One trampoline per encoder: attachInterrupt() can't pass arguments,
-  // and a shared global index would be wrong (both encoders' interrupts
-  // fire after both setup() calls, so a global set at setup time would
-  // always hold the last index).
-  void IRAM_ATTR isrDecode(int i)
+  // attachInterruptArg passes the encoder index through: no trampoline
+  // lambdas needed, each pin's interrupt is unambiguously bound to its
+  // own encoder index.
+  // Interrupts are attached ONLY to the CLK pin (not DT): half the
+  // interrupt load, and a bouncing/floating DT pin can no longer storm
+  // the ISR. DT is read as the direction, but ONLY on the FALLING edge of
+  // CLK, never CHANGE: the DT-vs-direction relationship flips between
+  // CLK's rising and falling edge, so triggering on both (CHANGE) decodes
+  // half the transitions backwards. Net effect observed on hardware: a
+  // rotation in one consistent direction landed on a preset/parameter
+  // change that looked random, because the sum of alternating +1/-1 steps
+  // came down to whichever edge the mechanical bounce happened to land on.
+  void IRAM_ATTR isrDecode(void *arg)
   {
-    uint8_t newState = (digitalRead(clkPin[i]) << 1) | digitalRead(dtPin[i]);
-    uint8_t index = (state[i] << 2) | newState;
-    state[i] = newState;
-
-    subSteps[i] += transitionTable[index];
-
-    if (subSteps[i] >= 4)
-    {
-      pendingDetents[i]++;
-      subSteps[i] = 0;
-    }
-    else if (subSteps[i] <= -4)
-    {
-      pendingDetents[i]--;
-      subSteps[i] = 0;
-    }
+    int i = (int)(intptr_t)arg;
+    int direction = digitalRead(dtPin[i]) ? 1 : -1;
+    pendingRawSteps[i] += direction;
   }
 }
 
@@ -62,30 +39,19 @@ void encoderSetup(int index, int clk, int dt)
   pinMode(clk, INPUT_PULLUP);
   pinMode(dt, INPUT_PULLUP);
 
-  state[index] = (digitalRead(clk) << 1) | digitalRead(dt);
-
-  if (index == 0)
-  {
-    attachInterrupt(digitalPinToInterrupt(clk), []
-                    { isrDecode(0); }, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(dt), []
-                    { isrDecode(0); }, CHANGE);
-  }
-  else if (index == 1)
-  {
-    attachInterrupt(digitalPinToInterrupt(clk), []
-                    { isrDecode(1); }, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(dt), []
-                    { isrDecode(1); }, CHANGE);
-  }
+  attachInterruptArg(digitalPinToInterrupt(clk), isrDecode,
+                     (void *)(intptr_t)index, FALLING);
 }
 
 int encoderRead(int index)
 {
   noInterrupts();
-  int detents = pendingDetents[index];
-  pendingDetents[index] = 0;
+  int rawSteps = pendingRawSteps[index];
+  pendingRawSteps[index] = 0;
   interrupts();
 
-  return detents;
+  // One raw CLK falling edge per detent now (no more /2); clamped so a
+  // glitchy pin (bounce storm between two reads) can never yield an
+  // absurd delta in one frame.
+  return constrain(rawSteps, -8, 8);
 }

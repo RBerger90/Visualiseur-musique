@@ -168,14 +168,110 @@ void ledEffectsSetSaturation(uint8_t saturation)
   baseSaturation = saturation;
 }
 
+// Height (in LEDs) of the bar in column x for the given band value. Shared
+// by all bar-based presets so they stay consistent with each other. Clamped
+// here (not just where callers happen to use it): a loud transient can push
+// band well past what MATRIX_HEIGHT can show, and an un-clamped height fed
+// into effectSymmetricBars's "3 - d" / "4 + d" indexing wraps into negative
+// or over-height rows, i.e. an out-of-bounds write into leds[] that
+// corrupts memory and crashes a frame or two later in unrelated code.
+int barHeight(float band)
+{
+  return constrain((int)(band / 10000.0), 0, MATRIX_HEIGHT);
+}
+
+
+
 void effectSpectrumBars(const float bands[MATRIX_WIDTH])
 {
   FastLED.clear();
 
   for (int x = 0; x < MATRIX_WIDTH; x++)
+    setColumn(x, barHeight(bands[x]));
+}
+
+void effectSymmetricBars(const float bands[MATRIX_WIDTH])
+{
+  FastLED.clear();
+
+  for (int x = 0; x < MATRIX_WIDTH; x++)
   {
-    int height = (int)(bands[x] / 10000.0);
+    // Fully dark at silence: half the band height grows from the exact
+    // center of the matrix upward AND downward (on a height-8 matrix, a
+    // height-8 bar fills the whole column and its half fills 4+4). A
+    // half-height of 0 leaves the column off rather than keeping a lit
+    // midline, which read as a floating artifact.
+    int halfHeight = barHeight(bands[x]) / 2;
+
+    for (int d = 0; d < halfHeight; d++)
+    {
+      leds[ledIndex(x, 3 - d)] = paletteColor(x, 3 - d);
+      leds[ledIndex(x, 4 + d)] = paletteColor(x, 4 + d);
+    }
+  }
+}
+
+void effectBarsInverted(const float bands[MATRIX_WIDTH])
+{
+  FastLED.clear();
+
+  for (int x = 0; x < MATRIX_WIDTH; x++)
+  {
+    // Same bottom-up bar as the spectrum effect, but inverted roles: the
+    // bar itself is dark and the empty space above it is colored. The
+    // color thus hangs from the top of the matrix down to the bar's top,
+    // and grows as the bar shrinks.
+    int height = constrain(barHeight(bands[x]), 0, MATRIX_HEIGHT);
+
+    for (int y = 0; y < MATRIX_HEIGHT; y++)
+      leds[ledIndex(x, y)] = (y < height) ? CRGB::Black : paletteColor(x, y);
+  }
+}
+
+// Per-column peak hold for effectBarsHoppers: the white peak marker sits at
+// the bar's historical maximum and falls back down slowly, lagging behind
+// the (instantaneous) bar itself.
+namespace
+{
+  int peakHeight[MATRIX_WIDTH] = {0};
+  unsigned long peakLastFallMs[MATRIX_WIDTH] = {0};
+}
+
+void effectBarsHoppers(const float bands[MATRIX_WIDTH])
+{
+  FastLED.clear();
+
+  const float PEAK_FALL_MS_PER_LED = 60;
+
+  for (int x = 0; x < MATRIX_WIDTH; x++)
+  {
+    int height = constrain(barHeight(bands[x]), 0, MATRIX_HEIGHT);
+
+    // The peak tracks the bar's maximum: rises instantly with the bar,
+    // then falls one LED every PEAK_FALL_MS_PER_LED when the bar drops
+    // below it. Falls even while the bar keeps moving, so the white dot
+    // is the "recent high" of the column, slower than the bar itself.
+    if (height >= peakHeight[x])
+    {
+      peakHeight[x] = height;
+      peakLastFallMs[x] = millis();
+    }
+    else if (millis() - peakLastFallMs[x] >= PEAK_FALL_MS_PER_LED)
+    {
+      peakHeight[x]--;
+      peakLastFallMs[x] = millis();
+    }
+    peakHeight[x] = constrain(peakHeight[x], 0, MATRIX_HEIGHT);
+
     setColumn(x, height);
+
+    // White peak marker at the top of the peak (the bar's recent max).
+    // Drawn AFTER setColumn, overwriting the bar's top LED when the bar
+    // has caught up with its peak. On a rising bar the peak is the bar
+    // top itself, so the dot reads as the bar's leading edge.
+    int peakY = peakHeight[x] - 1;
+    if (peakY >= 0)
+      leds[ledIndex(x, peakY)] = CRGB::White;
   }
 }
 

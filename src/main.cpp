@@ -16,7 +16,7 @@
 // Encoder A = parameters (click cycles the parameter, rotation adjusts it).
 #define ENC_A_CLK 32
 #define ENC_A_DT 33
-// Encoder B = effect selection (rotation switches the visual effect).
+// Encoder B = preset gallery (rotation switches the visual preset).
 #define ENC_B_CLK 25
 #define ENC_B_DT 26
 // Push buttons, handled independently by buttonPressed(pin).
@@ -49,17 +49,22 @@ enum PotMode
 
 PotMode potMode = POT_MODE_MIC_SENSITIVITY;
 
-// Visual effect currently displayed; encoder 1 (ENC_EFFECT) switches it.
-// The order declared here is the rotation order.
-enum EffectMode
+// Preset currently displayed; encoder B (rotation) cycles the gallery. A
+// preset pairs one visual effect with the parameter values it is shown
+// with (palette, hue, saturation... today the globals, later user-stored
+// custom presets). The order declared here is the rotation order. Snake
+// fill and scrolling text still exist in LedEffects but are out of the
+// gallery for now.
+enum PresetMode
 {
-  EFFECT_MODE_SPECTRUM_BARS,
-  EFFECT_MODE_SNAKE_FILL,
-  EFFECT_MODE_SCROLLING_TEXT,
-  EFFECT_MODE_COUNT
+  PRESET_SPECTRUM_BARS,
+  PRESET_SYMMETRIC_BARS,
+  PRESET_BARS_INVERTED,
+  PRESET_BARS_HOPPERS,
+  PRESET_MODE_COUNT
 };
 
-EffectMode effectMode = EFFECT_MODE_SPECTRUM_BARS;
+PresetMode presetMode = PRESET_SPECTRUM_BARS;
 
 // Current index into MIC_SENSITIVITY_LEVELS (2 = 1.0x, the default value).
 int micSensitivityLevel = 2;
@@ -128,14 +133,18 @@ const int FADER_DEADBAND = 20;
 int appliedFaderRaw = 0;
 bool faderApplied = false;
 
-// Settings indicator (effectParamHud): stays displayed for this long after
-// the last change (click or rotation), then disappears.
+// Settings indicators (effectParamHud): each stays displayed for this long
+// after its own encoder's last change, then disappears. One trigger set per
+// encoder so the two HUDs don't repaint over each other.
 const unsigned long PARAM_HUD_DURATION_MS = 3000;
 
-// Stays false until a change has ever happened, so the indicator doesn't
+// Stays false until a change has ever happened, so the indicators don't
 // show at startup.
 bool paramHudTriggered = false;
 unsigned long paramHudShownAt = 0;
+
+bool presetHudTriggered = false;
+unsigned long presetHudShownAt = 0;
 
 const uint16_t SAMPLES = 512;
 const uint32_t SAMPLE_RATE = 16000;
@@ -283,10 +292,19 @@ void loop()
   int encoderADelta = encoderRead(0);
   int encoderBDelta = encoderRead(1);
 
-  if (encoderADelta != 0 || encoderBDelta != 0)
+  // Each HUD is triggered only by its own encoder, and only the most
+  // recently moved one's HUD is drawn later in loop(): otherwise the param
+  // HUD would repaint over the preset HUD on every frame after the preset
+  // rotation stops (the delta is back to 0 but the display window is not).
+  if (encoderADelta != 0)
   {
     paramHudTriggered = true;
     paramHudShownAt = millis();
+  }
+  if (encoderBDelta != 0)
+  {
+    presetHudTriggered = true;
+    presetHudShownAt = millis();
   }
 
   switch (potMode)
@@ -333,13 +351,13 @@ void loop()
     break;
   }
 
-  // Effect encoder: one detent = next/previous effect, wraparound.
+  // Preset gallery encoder: one detent = next/previous preset, wraparound.
   if (encoderBDelta != 0)
   {
-    int nextMode = ((int)effectMode + encoderBDelta) % EFFECT_MODE_COUNT;
-    if (nextMode < 0)
-      nextMode += EFFECT_MODE_COUNT;
-    effectMode = (EffectMode)nextMode;
+    int nextPreset = ((int)presetMode + encoderBDelta) % PRESET_MODE_COUNT;
+    if (nextPreset < 0)
+      nextPreset += PRESET_MODE_COUNT;
+    presetMode = (PresetMode)nextPreset;
   }
 
   // Fader → brightness: re-apply only on a genuine wiper move (beyond the
@@ -354,36 +372,26 @@ void loop()
                          FADER_RAW_MIN, FADER_RAW_MAX,
                          FADER_BRIGHTNESS_MIN, FADER_BRIGHTNESS_MAX);
     ledEffectsSetBrightness(brightness);
-
-    Serial.print("faderRaw = ");
-    Serial.print(faderRaw);
-    Serial.print(", brightness = ");
-    Serial.println(brightness);
   }
 
   captureSamples();
   removeDC();
   computeBands();
 
-  // One visual per EffectMode; the HUD overwrites the first columns after
+  // One visual per PresetMode; the HUD overwrites the first columns after
   // the effect, so the dispatch must come before it.
-  switch (effectMode)
+  switch (presetMode)
   {
-  case EFFECT_MODE_SNAKE_FILL:
-    // Rebuilt from scratch every frame: the lit length follows the sound
-    // level (sum of the bands), so the snake "breathes" with the music.
-    {
-      float level = 0;
-      for (int i = 0; i < MATRIX_WIDTH; i++)
-        level += bands[i];
-      int lit = map(constrain((int)level, 0, 200000), 0, 200000, 0, MATRIX_WIDTH * MATRIX_HEIGHT);
-      effectFillSnake(lit, CHSV(baseHue, saturation, 255));
-      break;
-    }
-  case EFFECT_MODE_SCROLLING_TEXT:
-    effectScrollingText("GRILLE LED", CHSV(baseHue, saturation, 255));
+  case PRESET_SYMMETRIC_BARS:
+    effectSymmetricBars(bands);
     break;
-  case EFFECT_MODE_SPECTRUM_BARS:
+  case PRESET_BARS_INVERTED:
+    effectBarsInverted(bands);
+    break;
+  case PRESET_BARS_HOPPERS:
+    effectBarsHoppers(bands);
+    break;
+  case PRESET_SPECTRUM_BARS:
   default:
     effectSpectrumBars(bands);
     break;
@@ -391,11 +399,15 @@ void loop()
 
   bool paramHudVisible = paramHudTriggered &&
                          millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
-  if (paramHudVisible && encoderBDelta != 0)
+  bool presetHudVisible = presetHudTriggered &&
+                          millis() - presetHudShownAt < PARAM_HUD_DURATION_MS;
+
+  // Only the most recently moved encoder's HUD is drawn: the two overlays
+  // share the same first columns, drawing both would fight every frame.
+  if (presetHudVisible && (!paramHudVisible || presetHudShownAt >= paramHudShownAt))
   {
-    // The effect encoder has its own HUD: one LED per effect, at the
-    // effect's row. Row count is small (3 effects), the rest stays off.
-    effectParamHud((int)effectMode, -1);
+    // Preset gallery HUD: one LED per preset, at the preset's row.
+    effectParamHud((int)presetMode, -1);
   }
   else if (paramHudVisible)
   {

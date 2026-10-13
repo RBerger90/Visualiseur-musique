@@ -45,16 +45,32 @@ void ledEffectsSetHue(uint8_t hue);
 // 255 = fully saturated colors, 0 = white.
 void ledEffectsSetSaturation(uint8_t saturation);
 
-// --- Effects ---
+// --- Effects (visual render modes) ---
 // Each effect reads the audio data (one value per column, computed from the
 // microphone) and updates the LED buffer accordingly. ledEffectsShow() must
 // then be called to send the result to the strip.
+// An effect is a pure visual render mode; a preset (see PresetMode in
+// main.cpp) pairs one effect with the parameter values to display it with.
 // This is where the next effects should be added (one per function).
 
 // Spectrum bars: each column lights up to a height computed from bands[x]
 // (FFT magnitude of the column). The color of each LED depends on the
 // active palette (see PaletteMode), by column and/or row.
 void effectSpectrumBars(const float bands[MATRIX_WIDTH]);
+
+// Same bars, but mirrored around a fixed 2-pixel horizontal midline: the
+// bars grow symmetrically upward and downward from the center.
+void effectSymmetricBars(const float bands[MATRIX_WIDTH]);
+
+// Full-height colored background; each column's bar erases LEDs from the
+// TOP down (the bar's "height" is the number of dark LEDs at the top, the
+// color stays at the top of the matrix).
+void effectBarsInverted(const float bands[MATRIX_WIDTH]);
+
+// Spectrum bars plus a white "peak hold" marker per column: it sits at the
+// bar's recent maximum and falls back down slowly (slower than the bar),
+// so it reads as the top of the bar lagging behind.
+void effectBarsHoppers(const float bands[MATRIX_WIDTH]);
 
 // Scrolls `text` right to left, one column less every stepIntervalMs. The
 // scroll state is kept internally (only one scroll active at a time): call

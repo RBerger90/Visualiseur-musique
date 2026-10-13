@@ -11,3 +11,6 @@ void encoderSetup(int index, int clkPin, int dtPin);
 // moved. Resets the counter on every call, so only poll each index once
 // per frame.
 int encoderRead(int index);
+
+// TEMPORARY DEBUG: ISR fire count and internal state for encoder B.
+void encoderDebugB(unsigned long *isrFires, int *subStepVal, int *stateVal);
