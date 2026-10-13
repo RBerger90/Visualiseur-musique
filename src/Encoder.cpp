@@ -64,10 +64,20 @@ void encoderSetup(int index, int clk, int dt)
 
   state[index] = (digitalRead(clk) << 1) | digitalRead(dt);
 
-  attachInterrupt(digitalPinToInterrupt(clk), []
-                  { isrDecode(index); }, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(dt), []
-                  { isrDecode(index); }, CHANGE);
+  if (index == 0)
+  {
+    attachInterrupt(digitalPinToInterrupt(clk), []
+                    { isrDecode(0); }, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(dt), []
+                    { isrDecode(0); }, CHANGE);
+  }
+  else if (index == 1)
+  {
+    attachInterrupt(digitalPinToInterrupt(clk), []
+                    { isrDecode(1); }, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(dt), []
+                    { isrDecode(1); }, CHANGE);
+  }
 }
 
 int encoderRead(int index)
