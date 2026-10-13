@@ -3,20 +3,22 @@
 
 namespace
 {
-  int clkPin = -1;
-  int dtPin = -1;
+  const int ENCODER_COUNT = 2;
+
+  int clkPin[ENCODER_COUNT];
+  int dtPin[ENCODER_COUNT];
 
   // Current state of the 2 pins, as (CLK << 1 | DT), updated on every
   // interrupt.
-  volatile uint8_t state = 0;
+  volatile uint8_t state[ENCODER_COUNT];
 
   // Accumulates quarter-steps between two mechanical detents (one detent =
   // one full quadrature cycle, see diagram). Reset to zero as soon as a
   // full detent is detected.
-  volatile int8_t subSteps = 0;
+  volatile int8_t subSteps[ENCODER_COUNT];
 
   // Full detents waiting to be read by encoderRead().
-  volatile int pendingDetents = 0;
+  volatile int pendingDetents[ENCODER_COUNT];
 
   // Quadrature transition table, indexed by (previous state << 2 |
   // current state). +1/-1 for a valid step in one direction, 0 for an
@@ -27,46 +29,52 @@ namespace
       -1, 0, 0, 1,
       0, 1, -1, 0};
 
-  void IRAM_ATTR onPinChange()
+  // One trampoline per encoder: attachInterrupt() can't pass arguments,
+  // and a shared global index would be wrong (both encoders' interrupts
+  // fire after both setup() calls, so a global set at setup time would
+  // always hold the last index).
+  void IRAM_ATTR isrDecode(int i)
   {
-    uint8_t newState = (digitalRead(clkPin) << 1) | digitalRead(dtPin);
-    uint8_t index = (state << 2) | newState;
-    state = newState;
+    uint8_t newState = (digitalRead(clkPin[i]) << 1) | digitalRead(dtPin[i]);
+    uint8_t index = (state[i] << 2) | newState;
+    state[i] = newState;
 
-    subSteps += transitionTable[index];
+    subSteps[i] += transitionTable[index];
 
-    if (subSteps >= 4)
+    if (subSteps[i] >= 4)
     {
-      pendingDetents++;
-      subSteps = 0;
+      pendingDetents[i]++;
+      subSteps[i] = 0;
     }
-    else if (subSteps <= -4)
+    else if (subSteps[i] <= -4)
     {
-      pendingDetents--;
-      subSteps = 0;
+      pendingDetents[i]--;
+      subSteps[i] = 0;
     }
   }
 }
 
-void encoderSetup(int clk, int dt)
+void encoderSetup(int index, int clk, int dt)
 {
-  clkPin = clk;
-  dtPin = dt;
+  clkPin[index] = clk;
+  dtPin[index] = dt;
 
-  pinMode(clkPin, INPUT_PULLUP);
-  pinMode(dtPin, INPUT_PULLUP);
+  pinMode(clk, INPUT_PULLUP);
+  pinMode(dt, INPUT_PULLUP);
 
-  state = (digitalRead(clkPin) << 1) | digitalRead(dtPin);
+  state[index] = (digitalRead(clk) << 1) | digitalRead(dt);
 
-  attachInterrupt(digitalPinToInterrupt(clkPin), onPinChange, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(dtPin), onPinChange, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(clk), []
+                  { isrDecode(index); }, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(dt), []
+                  { isrDecode(index); }, CHANGE);
 }
 
-int encoderRead()
+int encoderRead(int index)
 {
   noInterrupts();
-  int detents = pendingDetents;
-  pendingDetents = 0;
+  int detents = pendingDetents[index];
+  pendingDetents[index] = 0;
   interrupts();
 
   return detents;

@@ -13,9 +13,15 @@
 #define I2S_PORT I2S_NUM_0
 #define BUFFER_LEN 256
 
-#define ENCODER_CLK_PIN 32
-#define ENCODER_DT_PIN 33
-#define BUTTON_PIN 27
+// Encoder A = parameters (click cycles the parameter, rotation adjusts it).
+#define ENC_A_CLK 32
+#define ENC_A_DT 33
+// Encoder B = effect selection (rotation switches the visual effect).
+#define ENC_B_CLK 25
+#define ENC_B_DT 26
+// Push buttons, handled independently by buttonPressed(pin).
+#define BTN_A_SW 27
+#define BTN_B_SW 14 // not wired yet, reserved
 
 // Fader wiper (OUTA). ADC1 input-only pin: it can only read, which is
 // exactly what a wiper driven by the fader's voltage divider needs.
@@ -42,6 +48,18 @@ enum PotMode
 };
 
 PotMode potMode = POT_MODE_MIC_SENSITIVITY;
+
+// Visual effect currently displayed; encoder 1 (ENC_EFFECT) switches it.
+// The order declared here is the rotation order.
+enum EffectMode
+{
+  EFFECT_MODE_SPECTRUM_BARS,
+  EFFECT_MODE_SNAKE_FILL,
+  EFFECT_MODE_SCROLLING_TEXT,
+  EFFECT_MODE_COUNT
+};
+
+EffectMode effectMode = EFFECT_MODE_SPECTRUM_BARS;
 
 // Current index into MIC_SENSITIVITY_LEVELS (2 = 1.0x, the default value).
 int micSensitivityLevel = 2;
@@ -238,8 +256,10 @@ void setup()
 {
   Serial.begin(115200);
   delay(500);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  encoderSetup(ENCODER_CLK_PIN, ENCODER_DT_PIN);
+  pinMode(BTN_A_SW, INPUT_PULLUP);
+  pinMode(BTN_B_SW, INPUT_PULLUP);
+  encoderSetup(0, ENC_A_CLK, ENC_A_DT);
+  encoderSetup(1, ENC_B_CLK, ENC_B_DT);
   faderSetup(FADER_PIN);
   setupI2S();
   ledEffectsSetup();
@@ -247,7 +267,7 @@ void setup()
 
 void loop()
 {
-  if (buttonPressed(BUTTON_PIN))
+  if (buttonPressed(BTN_A_SW))
   {
     potMode = (PotMode)((potMode + 1) % POT_MODE_COUNT);
     Serial.print("pot mode = ");
@@ -260,9 +280,10 @@ void loop()
   // Drain the encoder every frame even outside mic sensitivity mode, so a
   // movement made in another mode doesn't get applied all at once when
   // coming back to this one.
-  int encoderDelta = encoderRead();
+  int encoderADelta = encoderRead(0);
+  int encoderBDelta = encoderRead(1);
 
-  if (encoderDelta != 0)
+  if (encoderADelta != 0 || encoderBDelta != 0)
   {
     paramHudTriggered = true;
     paramHudShownAt = millis();
@@ -274,7 +295,7 @@ void loop()
     // One detent = one level; clamped at the extremities (no wraparound, a
     // sensitivity doesn't "restart" at 0.5x once 3.0x is exceeded).
     micSensitivityLevel = constrain(
-        micSensitivityLevel + encoderDelta, 0, MIC_SENSITIVITY_LEVEL_COUNT - 1);
+        micSensitivityLevel + encoderADelta, 0, MIC_SENSITIVITY_LEVEL_COUNT - 1);
     micSensitivity = MIC_SENSITIVITY_LEVELS[micSensitivityLevel];
     break;
   case POT_MODE_ANIM_SPEED:
@@ -282,14 +303,14 @@ void loop()
     // speed doesn't "become" the slowest again once the fastest is
     // exceeded). The delay is applied at the end of loop(), not here.
     animSpeedLevel = constrain(
-        animSpeedLevel + encoderDelta, 0, FRAME_DELAY_LEVEL_COUNT - 1);
+        animSpeedLevel + encoderADelta, 0, FRAME_DELAY_LEVEL_COUNT - 1);
     break;
   case POT_MODE_COLOR_PALETTE:
     // One detent = the next/previous palette, with circular wraparound
     // (unlike micSensitivity, a palette has no bounds).
-    if (encoderDelta != 0)
+    if (encoderADelta != 0)
     {
-      int nextPalette = ((int)colorPalette + encoderDelta) % PALETTE_MODE_COUNT;
+      int nextPalette = ((int)colorPalette + encoderADelta) % PALETTE_MODE_COUNT;
       if (nextPalette < 0)
         nextPalette += PALETTE_MODE_COUNT;
 
@@ -300,11 +321,11 @@ void loop()
   case POT_MODE_HUE_ROTATION:
     // baseHue is a uint8_t: the addition wraps around naturally on 0-255,
     // no need to clamp it like micSensitivityLevel.
-    baseHue += encoderDelta * HUE_ROTATION_STEP;
+    baseHue += encoderADelta * HUE_ROTATION_STEP;
     ledEffectsSetHue(baseHue);
     break;
   case POT_MODE_SATURATION:
-    saturation = constrain((int)saturation + encoderDelta * SATURATION_STEP, 0, 255);
+    saturation = constrain((int)saturation + encoderADelta * SATURATION_STEP, 0, 255);
     ledEffectsSetSaturation(saturation);
     break;
   default:
@@ -312,11 +333,18 @@ void loop()
     break;
   }
 
+  // Effect encoder: one detent = next/previous effect, wraparound.
+  if (encoderBDelta != 0)
+  {
+    int nextMode = ((int)effectMode + encoderBDelta) % EFFECT_MODE_COUNT;
+    if (nextMode < 0)
+      nextMode += EFFECT_MODE_COUNT;
+    effectMode = (EffectMode)nextMode;
+  }
+
   // Fader → brightness: re-apply only on a genuine wiper move (beyond the
   // deadband around the last applied position), never on ADC jitter.
   int faderRaw = faderReadRaw();
-  Serial.print("faderRaw = ");
-  Serial.println(faderRaw);
   if (!faderApplied || abs(faderRaw - appliedFaderRaw) > FADER_DEADBAND)
   {
     appliedFaderRaw = faderRaw;
@@ -337,11 +365,39 @@ void loop()
   removeDC();
   computeBands();
 
-  effectSpectrumBars(bands);
+  // One visual per EffectMode; the HUD overwrites the first columns after
+  // the effect, so the dispatch must come before it.
+  switch (effectMode)
+  {
+  case EFFECT_MODE_SNAKE_FILL:
+    // Rebuilt from scratch every frame: the lit length follows the sound
+    // level (sum of the bands), so the snake "breathes" with the music.
+    {
+      float level = 0;
+      for (int i = 0; i < MATRIX_WIDTH; i++)
+        level += bands[i];
+      int lit = map(constrain((int)level, 0, 200000), 0, 200000, 0, MATRIX_WIDTH * MATRIX_HEIGHT);
+      effectFillSnake(lit, CHSV(baseHue, saturation, 255));
+      break;
+    }
+  case EFFECT_MODE_SCROLLING_TEXT:
+    effectScrollingText("GRILLE LED", CHSV(baseHue, saturation, 255));
+    break;
+  case EFFECT_MODE_SPECTRUM_BARS:
+  default:
+    effectSpectrumBars(bands);
+    break;
+  }
 
   bool paramHudVisible = paramHudTriggered &&
                          millis() - paramHudShownAt < PARAM_HUD_DURATION_MS;
-  if (paramHudVisible)
+  if (paramHudVisible && encoderBDelta != 0)
+  {
+    // The effect encoder has its own HUD: one LED per effect, at the
+    // effect's row. Row count is small (3 effects), the rest stays off.
+    effectParamHud((int)effectMode, -1);
+  }
+  else if (paramHudVisible)
   {
     if (potMode == POT_MODE_HUE_ROTATION)
     {
